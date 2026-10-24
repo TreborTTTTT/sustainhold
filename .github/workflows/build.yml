@@ -22,6 +22,7 @@ jobs:
           sudo installer -pkg TAL-U-NO-LX-V2-installer.pkg -target /
           export SUSTAINHOLD_TARGET="/Library/Audio/Plug-Ins/VST/TAL-U-NO-LX-V2.vst/Contents/MacOS/TAL-U-NO-LX-V2"
           cd build
+          ./direct_test || echo "DIRECT SILENT (env issue, not proxy)"
           ./smoke_tal
           ./test_switch
       - name: package artifact

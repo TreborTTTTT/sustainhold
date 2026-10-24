@@ -1,9 +1,12 @@
-// direct_test.cpp — load tal_real.dll with no proxy; open, render, close.
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+// direct_test.cpp — load the target plugin with NO proxy; open, render, close.
+// Isolates proxy bugs from plugin/host-environment issues. Target path comes
+// from SUSTAINHOLD_TARGET (absolute), default tal_real.dll/.dylib next to cwd.
 #include <cstdio>
+#include <cstring>
+#include <cstdlib>
 #include <cmath>
 #include "aeffectx.h"
+#include "platform.h"
 
 static VstTimeInfo g_ti;
 static void initTime() {
@@ -30,20 +33,37 @@ static VstIntPtr VSTCALLBACK mc(AEffect*, VstInt32 o, VstInt32 idx, VstIntPtr v,
 
 int main() {
   initTime();
-  HMODULE h = LoadLibraryA("tal_real.dll");
-  if (!h) { printf("LoadLibrary fail %lu\n", GetLastError()); return 2; }
+  const char* path = getenv("SUSTAINHOLD_TARGET");
+  if (!path || !*path)
+#ifdef _WIN32
+    path = "tal_real.dll";
+#else
+    path = "tal_real.dylib";
+#endif
+  ModHandle h = modLoad(path);
+  if (!h) { printf("modLoad fail: %s\n", path); return 2; }
   typedef AEffect* (*F)(audioMasterCallback);
-  F f = (F)GetProcAddress(h, "VSTPluginMain");
+  F f = (F)modSym(h, "VSTPluginMain");
+  if (!f) f = (F)modSym(h, "main");
   AEffect* e = f ? f(mc) : nullptr;
   if (!e) { printf("factory null\n"); return 2; }
   printf("AEffect ok params=%d progs=%d ins=%d outs=%d flags=%08X\n",
          e->numParams, e->numPrograms, e->numInputs, e->numOutputs, (unsigned)e->flags);
   e->dispatcher(e, effOpen, 0, 0, 0, 0);
   printf("open ok\n"); fflush(stdout);
-  e->dispatcher(e, effSetSampleRate, 0, 0, 0, 44100.0f);
+  e->dispatcher(e, effSetSampleRate, 0, 44100, 0, 44100.0f);
   e->dispatcher(e, effSetBlockSize, 0, 512, 0, 0);
   e->dispatcher(e, effMainsChanged, 0, 1, 0, 0);
   printf("setup ok\n"); fflush(stdout);
+
+  // dump a few param names/values to see whether defaults are initialized
+  for (int p = 0; p < 8 && p < e->numParams; ++p) {
+    char nm[64] = {0}, disp[64] = {0};
+    e->dispatcher(e, effGetParamName, p, 0, nm, 0);
+    e->dispatcher(e, effGetParamDisplay, p, 0, disp, 0);
+    printf("  param %d '%s' = '%s' (raw %.3f)\n", p, nm, disp, e->getParameter(e, p));
+  }
+  fflush(stdout);
 
   static float in0[512], in1[512], out0[512], out1[512];
   float* ins[2] = { in0, in1 };

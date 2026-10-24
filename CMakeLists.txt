@@ -49,9 +49,12 @@ target_include_directories(smoke_tal PRIVATE sdk)
 add_executable(test_switch src/test_switch.cpp)
 target_include_directories(test_switch PRIVATE sdk)
 
+add_executable(direct_test src/direct_test.cpp)
+target_include_directories(direct_test PRIVATE sdk)
+
 # Windows-only installed-plugin probes
 if(WIN32)
-  foreach(p poly_probe2 verify_installed direct_test)
+  foreach(p poly_probe2 verify_installed)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/${p}.cpp")
       add_executable(${p} src/${p}.cpp)
       target_include_directories(${p} PRIVATE sdk)
