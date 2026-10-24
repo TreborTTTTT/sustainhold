@@ -66,6 +66,7 @@ static double render(AEffect* fx, float** outs) {
   double rms = 0;
   for (int ch = 0; ch < fx->numOutputs; ++ch) memset(outs[ch], 0, kBlock * sizeof(float));
   fx->processReplacing(fx, ins, outs, kBlock);
+  g_ti.samplePos += kBlock;
   for (int i = 0; i < kBlock; ++i) {
     rms += outs[0][i] * outs[0][i];
     if (g_ncap < (int)(32 * 512)) g_cap[g_ncap++] = outs[0][i];
@@ -105,12 +106,15 @@ int main() {
   AEffect* fx = fn ? fn(masterCb) : nullptr;
   if (!fx) { printf("FATAL factory\n"); return 2; }
   fx->dispatcher(fx, effOpen, 0, 0, 0, 0);
+  fx->dispatcher(fx, effSetProgram, 0, 0, 0, 0);
   fx->dispatcher(fx, effSetSampleRate, 0, 44100, 0, 44100.0f);  // value AND opt: hosts differ
   fx->dispatcher(fx, effSetBlockSize, 0, kBlock, 0, 0);
+  static float out0[kBlock], out1[kBlock];
+  fx->dispatcher(fx, 42 /*effConnectOutput*/, 0, 0, out0, 0);
+  fx->dispatcher(fx, 42 /*effConnectOutput*/, 1, 0, out1, 0);
   fx->dispatcher(fx, effMainsChanged, 0, 1, 0, 0);
   fx->dispatcher(fx, effStartProcess, 0, 0, 0, 0);
 
-  static float out0[kBlock], out1[kBlock];
   float* outs[2] = { out0, out1 };
   int fr0[1] = {0};
 

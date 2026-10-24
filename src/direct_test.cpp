@@ -52,6 +52,9 @@ static VstIntPtr VSTCALLBACK mc(AEffect*, VstInt32 o, VstInt32 idx, VstIntPtr v,
 
 int main() {
   initTime();
+  static float in0[512], in1[512], out0[512], out1[512];
+  float* ins[2] = { in0, in1 };
+  float* outs[2] = { out0, out1 };
   const char* path = getenv("SUSTAINHOLD_TARGET");
   if (!path || !*path)
 #ifdef _WIN32
@@ -72,8 +75,11 @@ int main() {
          e->numParams, e->numPrograms, e->numInputs, e->numOutputs, (unsigned)e->flags);
   e->dispatcher(e, effOpen, 0, 0, 0, 0);
   printf("open ok\n"); fflush(stdout);
+  e->dispatcher(e, effSetProgram, 0, 0, 0, 0);
   e->dispatcher(e, effSetSampleRate, 0, 44100, 0, 44100.0f);
   e->dispatcher(e, effSetBlockSize, 0, 512, 0, 0);
+  e->dispatcher(e, 42 /*effConnectOutput*/, 0, 0, out0, 0);
+  e->dispatcher(e, 42 /*effConnectOutput*/, 1, 0, out1, 0);
   e->dispatcher(e, effMainsChanged, 0, 1, 0, 0);
   e->dispatcher(e, effStartProcess, 0, 0, 0, 0);
   printf("setup ok\n"); fflush(stdout);
@@ -86,10 +92,6 @@ int main() {
     printf("  param %d '%s' = '%s' (raw %.3f)\n", p, nm, disp, e->getParameter(e, p));
   }
   fflush(stdout);
-
-  static float in0[512], in1[512], out0[512], out1[512];
-  float* ins[2] = { in0, in1 };
-  float* outs[2] = { out0, out1 };
 
   // send one note-on directly (same struct layout the proxy builds)
   {
@@ -107,6 +109,7 @@ int main() {
   double rms = 0, rms1 = 0;
   for (int b = 0; b < 10; ++b) {
     e->processReplacing(e, ins, outs, 512);
+    g_ti.samplePos += 512;
     for (int i = 0; i < 512; ++i) { rms += out0[i] * out0[i]; rms1 += out1[i] * out1[i]; }
   }
   printf("render ok rms=%.6f rmsR=%.6f\n", sqrt(rms / 5120), sqrt(rms1 / 5120)); fflush(stdout);
