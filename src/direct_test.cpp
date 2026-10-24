@@ -54,10 +54,11 @@ int main() {
   e->dispatcher(e, effSetSampleRate, 0, 44100, 0, 44100.0f);
   e->dispatcher(e, effSetBlockSize, 0, 512, 0, 0);
   e->dispatcher(e, effMainsChanged, 0, 1, 0, 0);
+  e->dispatcher(e, effStartProcess, 0, 0, 0, 0);
   printf("setup ok\n"); fflush(stdout);
 
-  // dump a few param names/values to see whether defaults are initialized
-  for (int p = 0; p < 8 && p < e->numParams; ++p) {
+  // dump ALL param names/values to see whether defaults are initialized
+  for (int p = 0; p < e->numParams; ++p) {
     char nm[64] = {0}, disp[64] = {0};
     e->dispatcher(e, effGetParamName, p, 0, nm, 0);
     e->dispatcher(e, effGetParamDisplay, p, 0, disp, 0);
