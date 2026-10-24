@@ -119,18 +119,28 @@ int main() {
   printf("render ok rms=%.6f rmsR=%.6f\n", sqrt(rms / 5120), sqrt(rms1 / 5120)); fflush(stdout);
 
   // ---- diagnostic sweep: force key params to audible values, re-render ----
+  // group 0 = all, 1 = ADSR only, 2 = master volume only, 3 = dco/vca only
+  const char* genv = getenv("SWEEP_GROUP");
+  int grp = genv ? atoi(genv) : 0;
   for (int p = 0; p < e->numParams; ++p) {
     char nm[64] = {0};
     e->dispatcher(e, effGetParamName, p, 0, nm, 0);
-    if (!strcmp(nm, "master volume"))  e->setParameter(e, p, 0.8f);
-    if (!strcmp(nm, "attack"))         e->setParameter(e, p, 0.05f);
-    if (!strcmp(nm, "decay"))          e->setParameter(e, p, 0.5f);
-    if (!strcmp(nm, "sustain"))        e->setParameter(e, p, 0.8f);
-    if (!strcmp(nm, "release"))        e->setParameter(e, p, 0.3f);
-    if (!strcmp(nm, "filter cutoff"))  e->setParameter(e, p, 0.8f);
-    if (!strcmp(nm, "dco saw enabled"))e->setParameter(e, p, 1.0f);
-    if (!strcmp(nm, "dco pulse enabled")) e->setParameter(e, p, 1.0f);
-    if (!strcmp(nm, "vca mode"))       e->setParameter(e, p, 0.0f);
+    bool adsr  = !strcmp(nm,"attack")||!strcmp(nm,"decay")||!strcmp(nm,"sustain")||!strcmp(nm,"release");
+    bool mvol  = !strcmp(nm,"master volume");
+    bool dcvca = !strcmp(nm,"filter cutoff")||!strcmp(nm,"dco saw enabled")||!strcmp(nm,"dco pulse enabled")||!strcmp(nm,"vca mode");
+    bool on = (grp==0) || (grp==1 && adsr) || (grp==2 && mvol) || (grp==3 && dcvca);
+    if (!on) continue;
+    if (adsr) {
+      if (!strcmp(nm,"attack"))  e->setParameter(e, p, 0.05f);
+      if (!strcmp(nm,"decay"))   e->setParameter(e, p, 0.5f);
+      if (!strcmp(nm,"sustain")) e->setParameter(e, p, 0.8f);
+      if (!strcmp(nm,"release")) e->setParameter(e, p, 0.3f);
+    }
+    if (mvol)  e->setParameter(e, p, 0.8f);
+    if (!strcmp(nm,"filter cutoff"))  e->setParameter(e, p, 0.8f);
+    if (!strcmp(nm,"dco saw enabled"))e->setParameter(e, p, 1.0f);
+    if (!strcmp(nm,"dco pulse enabled")) e->setParameter(e, p, 1.0f);
+    if (!strcmp(nm,"vca mode"))   e->setParameter(e, p, 0.0f);
   }
   {
     static VstMidiEvent m2;

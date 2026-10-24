@@ -27,6 +27,7 @@ jobs:
           grep 'render ok' direct.out || true
           grep -E ' -> -1' direct.err | grep -viE 'licen|crash|\.plist|\.strings|\.nib|_LSETIME|locale|\.conf|\.dat/' | tail -25 || true
           ./direct_test || echo "DIRECT SILENT (env issue, not proxy)"
+          for g in 1 2 3; do SWEEP_GROUP=$g ./direct_test 2>/dev/null | grep -E 'render|sweep' | sed "s/^/group$g /" || true; done
           ./smoke_tal
           ./test_switch
       - name: package artifact
