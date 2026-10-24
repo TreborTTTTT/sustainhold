@@ -82,6 +82,8 @@ int main() {
   e->dispatcher(e, 42 /*effConnectOutput*/, 1, 0, out1, 0);
   e->dispatcher(e, 54 /*effSetBypass*/, 0, 0, 0, 0);
   e->dispatcher(e, 87 /*effSetProcessPrecision*/, 0, 0 /*float32*/, 0, 0);
+  { VstSpeakerArrangement arr; memset(&arr, 0, sizeof(arr)); arr.numChannels = 2; arr.type = 2 /*kSpeakerArrStereo*/; e->dispatcher(e, 52 /*effSetSpeakerArrangement*/, 0, (VstIntPtr)&arr, &arr, 0); }
+  e->dispatcher(e, 84 /*effSetPanLaw*/, 0, 0, 0, 1.0f);
   e->dispatcher(e, effMainsChanged, 0, 1, 0, 0);
   e->dispatcher(e, effStartProcess, 0, 0, 0, 0);
   printf("setup ok\n"); fflush(stdout);

@@ -113,6 +113,8 @@ int main() {
   fx->dispatcher(fx, 42 /*effConnectOutput*/, 1, 0, out1, 0);
   fx->dispatcher(fx, 54 /*effSetBypass*/, 0, 0, 0, 0);
   fx->dispatcher(fx, 87 /*effSetProcessPrecision*/, 0, 0 /*float32*/, 0, 0);
+  { VstSpeakerArrangement arr; memset(&arr, 0, sizeof(arr)); arr.numChannels = 2; arr.type = 2 /*kSpeakerArrStereo*/; fx->dispatcher(fx, 52 /*effSetSpeakerArrangement*/, 0, (VstIntPtr)&arr, &arr, 0); }
+  fx->dispatcher(fx, 84 /*effSetPanLaw*/, 0, 0, 0, 1.0f);
   fx->dispatcher(fx, effMainsChanged, 0, 1, 0, 0);
   fx->dispatcher(fx, effStartProcess, 0, 0, 0, 0);
 
