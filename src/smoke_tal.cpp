@@ -9,6 +9,20 @@
 
 static const int kBlock = 512;
 
+static char g_dir[1024] = ".";  // absolute dir of target plugin for audioMasterGetDirectory
+static void setDirFrom(const char* path) {
+  char full[1024];
+#ifdef _WIN32
+  if (!_fullpath(full, path, sizeof(full))) return;
+#else
+  if (!realpath(path, full)) return;
+#endif
+  char* slash = strrchr(full, '/');
+  if (!slash) return;
+  *slash = 0;
+  snprintf(g_dir, sizeof(g_dir), "%s", full);
+}
+
 static VstTimeInfo g_ti;
 static VstIntPtr VSTCALLBACK masterCb(AEffect* e, VstInt32 opcode, VstInt32, VstIntPtr, void*, float) {
   switch (opcode) {
@@ -17,6 +31,10 @@ static VstIntPtr VSTCALLBACK masterCb(AEffect* e, VstInt32 opcode, VstInt32, Vst
     case audioMasterGetBlockSize:  return kBlock;
     case audioMasterGetTime:       return (VstIntPtr)&g_ti;
     case 6: /*WantMidi*/            return 1;
+    case audioMasterGetDirectory:  return (VstIntPtr)(const char*)g_dir;
+    case audioMasterCanDo:         return 1;
+    case audioMasterGetCurrentProcessLevel: return 1; /*realtime*/
+    case audioMasterProcessEvents: return 1;
     default: return 0;
   }
 }
@@ -67,6 +85,7 @@ int main() {
 #endif
   fprintf(ini, "[sustainhold]\ntarget=%s\n", tgt);
   fclose(ini);
+  setDirFrom(tgt);
 
   ModHandle h = modLoad(modDefaultName());
   if (!h) { printf("FATAL: proxy module load failed\n"); return 2; }

@@ -18,6 +18,21 @@ static void initTime() {
                kVstTransportPlaying;
 }
 
+static char g_dir[1024] = ".";  // absolute dir of the target plugin (audioMasterGetDirectory)
+
+static void setDirFrom(const char* path) {
+  char full[1024];
+#ifdef _WIN32
+  if (!_fullpath(full, path, sizeof(full))) return;
+#else
+  if (!realpath(path, full)) return;
+#endif
+  char* slash = strrchr(full, '/');
+  if (!slash) return;
+  *slash = 0;
+  snprintf(g_dir, sizeof(g_dir), "%s", full);
+}
+
 static VstIntPtr VSTCALLBACK mc(AEffect*, VstInt32 o, VstInt32 idx, VstIntPtr v, void* p, float opt) {
   printf("  masterCb op=%d idx=%d val=%lld ptr=%p opt=%g\n", o, idx, (long long)v, p, opt);
   fflush(stdout);
@@ -27,6 +42,10 @@ static VstIntPtr VSTCALLBACK mc(AEffect*, VstInt32 o, VstInt32 idx, VstIntPtr v,
     case audioMasterVersion:       return 0x0240;
     case audioMasterGetSampleRate: return 44100;
     case audioMasterGetBlockSize:  return 512;
+    case audioMasterGetDirectory:  return (VstIntPtr)(const char*)g_dir;
+    case audioMasterCanDo:         return 1;
+    case audioMasterGetCurrentProcessLevel: return 1; /*realtime*/
+    case audioMasterProcessEvents: return 1;
     default: return 0;
   }
 }
@@ -42,6 +61,8 @@ int main() {
 #endif
   ModHandle h = modLoad(path);
   if (!h) { printf("modLoad fail: %s\n", path); return 2; }
+  setDirFrom(path);
+  printf("dir='%s'\n", g_dir); fflush(stdout);
   typedef AEffect* (*F)(audioMasterCallback);
   F f = (F)modSym(h, "VSTPluginMain");
   if (!f) f = (F)modSym(h, "main");
@@ -83,12 +104,12 @@ int main() {
     printf("midi sent ok\n"); fflush(stdout);
   }
 
-  double rms = 0;
+  double rms = 0, rms1 = 0;
   for (int b = 0; b < 10; ++b) {
     e->processReplacing(e, ins, outs, 512);
-    for (int i = 0; i < 512; ++i) rms += out0[i] * out0[i];
+    for (int i = 0; i < 512; ++i) { rms += out0[i] * out0[i]; rms1 += out1[i] * out1[i]; }
   }
-  printf("render ok rms=%.6f\n", sqrt(rms / 5120)); fflush(stdout);
+  printf("render ok rms=%.6f rmsR=%.6f\n", sqrt(rms / 5120), sqrt(rms1 / 5120)); fflush(stdout);
   e->dispatcher(e, effClose, 0, 0, 0, 0);
   printf("close ok\n");
   return 0;
