@@ -115,6 +115,38 @@ int main() {
     for (int i = 0; i < 512; ++i) { rms += out0[i] * out0[i]; rms1 += out1[i] * out1[i]; }
   }
   printf("render ok rms=%.6f rmsR=%.6f\n", sqrt(rms / 5120), sqrt(rms1 / 5120)); fflush(stdout);
+
+  // ---- diagnostic sweep: force key params to audible values, re-render ----
+  for (int p = 0; p < e->numParams; ++p) {
+    char nm[64] = {0};
+    e->dispatcher(e, effGetParamName, p, 0, nm, 0);
+    if (!strcmp(nm, "master volume"))  e->setParameter(e, p, 0.8f);
+    if (!strcmp(nm, "attack"))         e->setParameter(e, p, 0.05f);
+    if (!strcmp(nm, "decay"))          e->setParameter(e, p, 0.5f);
+    if (!strcmp(nm, "sustain"))        e->setParameter(e, p, 0.8f);
+    if (!strcmp(nm, "release"))        e->setParameter(e, p, 0.3f);
+    if (!strcmp(nm, "filter cutoff"))  e->setParameter(e, p, 0.8f);
+    if (!strcmp(nm, "dco saw enabled"))e->setParameter(e, p, 1.0f);
+    if (!strcmp(nm, "dco pulse enabled")) e->setParameter(e, p, 1.0f);
+    if (!strcmp(nm, "vca mode"))       e->setParameter(e, p, 0.0f);
+  }
+  {
+    static VstMidiEvent m2;
+    memset(&m2, 0, sizeof(m2));
+    m2.type = kVstMidiType; m2.byteSize = (VstInt32)sizeof(VstMidiEvent);
+    m2.midiData[0] = (char)0x80; m2.midiData[1] = 60; m2.midiData[2] = 0;  // off first
+    VstEvents ev0; ev0.numEvents = 1; ev0.reserved = 0; ev0.events[0] = (VstEvent*)&m2;
+    e->dispatcher(e, effProcessEvents, 0, 0, &ev0, 0.f);
+    m2.midiData[0] = (char)0x90; m2.midiData[2] = 127;                      // then on
+    e->dispatcher(e, effProcessEvents, 0, 0, &ev0, 0.f);
+  }
+  double rms2 = 0;
+  for (int b = 0; b < 10; ++b) {
+    e->processReplacing(e, ins, outs, 512);
+    g_ti.samplePos += 512;
+    for (int i = 0; i < 512; ++i) rms2 += out0[i] * out0[i];
+  }
+  printf("sweep rms=%.6f\n", sqrt(rms2 / 5120)); fflush(stdout);
   e->dispatcher(e, effClose, 0, 0, 0, 0);
   printf("close ok\n");
   return 0;
