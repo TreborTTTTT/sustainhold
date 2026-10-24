@@ -46,6 +46,5 @@ jobs:
         run: cmake --build build --config Release
       - name: unit test (host_test)
         run: |
-          cd build
-          if (Test-Path Release) { Copy-Item Release/*.dll . -ErrorAction SilentlyContinue }
+          cd build/Release
           .\host_test.exe

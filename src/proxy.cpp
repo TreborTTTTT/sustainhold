@@ -366,10 +366,4 @@ SH_EXPORT AEffect* VSTPluginMain(audioMasterCallback hostCb) {
   return self;
 }
 
-// macOS VST2 hosts look for the legacy 'main' symbol (Studio One accepts both).
-#ifndef _WIN32
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmain"
-SH_EXPORT AEffect* main(audioMasterCallback hostCb) { return VSTPluginMain(hostCb); }
-#pragma GCC diagnostic pop
-#endif
+// macOS 'main' symbol alias lives in mac/main_alias.S (C++ can't declare it).

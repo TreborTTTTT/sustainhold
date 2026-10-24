@@ -9,7 +9,12 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # ---------------------------------------------------------------- proxy ---
-add_library(proxy SHARED src/proxy.cpp)
+if(APPLE)
+  enable_language(ASM)
+  add_library(proxy SHARED src/proxy.cpp mac/main_alias.S)
+else()
+  add_library(proxy SHARED src/proxy.cpp)
+endif()
 target_include_directories(proxy PRIVATE sdk)
 set_target_properties(proxy PROPERTIES PREFIX "")   # proxy.dll / proxy.dylib
 
@@ -46,7 +51,7 @@ target_include_directories(test_switch PRIVATE sdk)
 
 # Windows-only installed-plugin probes
 if(WIN32)
-  foreach(p poly_probe poly_probe2 verify_installed direct_test)
+  foreach(p poly_probe2 verify_installed direct_test)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/${p}.cpp")
       add_executable(${p} src/${p}.cpp)
       target_include_directories(${p} PRIVATE sdk)
