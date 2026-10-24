@@ -78,9 +78,13 @@ int main() {
   printf("TAL through proxy: magic=%c%c%c%c params=%d progs=%d outs=%d id=%08X\n",
          fx->magic & 0xFF, (fx->magic >> 8) & 0xFF, (fx->magic >> 16) & 0xFF, (fx->magic >> 24) & 0xFF,
          fx->numParams, fx->numPrograms, fx->numOutputs, (unsigned)fx->uniqueID);
+  char prod[80] = {0}, vend[80] = {0};
+  fx->dispatcher(fx, effGetProductString, 0, 0, prod, 0);
+  fx->dispatcher(fx, effGetVendorString, 0, 0, vend, 0);
+  printf("product='%s' vendor='%s'\n", prod, vend);
 
   fx->dispatcher(fx, effOpen, 0, 0, 0, 0);
-  fx->dispatcher(fx, effSetSampleRate, 0, 0, 0, 44100.0f);
+  fx->dispatcher(fx, effSetSampleRate, 0, 44100, 0, 44100.0f);  // value AND opt: hosts differ
   fx->dispatcher(fx, effSetBlockSize, 0, kBlock, 0, 0);
   fx->dispatcher(fx, effMainsChanged, 0, 1, 0, 0);
 

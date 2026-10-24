@@ -86,7 +86,7 @@ int main() {
   AEffect* fx = fn ? fn(masterCb) : nullptr;
   if (!fx) { printf("FATAL factory\n"); return 2; }
   fx->dispatcher(fx, effOpen, 0, 0, 0, 0);
-  fx->dispatcher(fx, effSetSampleRate, 0, 0, 0, 44100.0f);
+  fx->dispatcher(fx, effSetSampleRate, 0, 44100, 0, 44100.0f);  // value AND opt: hosts differ
   fx->dispatcher(fx, effSetBlockSize, 0, kBlock, 0, 0);
   fx->dispatcher(fx, effMainsChanged, 0, 1, 0, 0);
 
