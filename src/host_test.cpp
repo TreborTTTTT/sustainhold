@@ -1,13 +1,12 @@
 // host_test.cpp — minimal VST2 host. Loads proxy.dll (which loads
 // test_target.dll via sustainhold.ini), drives MIDI scenarios through the
 // proxy, then asserts the exact event sequence the target received.
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
 #include "aeffectx.h"
+#include "platform.h"
 
 static const int kBlock = 512;
 static int g_fail = 0, g_pass = 0;
@@ -77,15 +76,19 @@ static void check(bool ok, const char* what) {
 }
 
 int main() {
-  // self-contained config: proxy.dll sits next to test_target.dll in build/
+  // self-contained config: proxy sits next to test_target in build/
   FILE* ini = fopen("sustainhold.ini", "w");
+#ifdef _WIN32
   fputs("[sustainhold]\ntarget=test_target.dll\n", ini);
+#else
+  fputs("[sustainhold]\ntarget=test_target.dylib\n", ini);
+#endif
   fclose(ini);
 
-  HMODULE h = LoadLibraryA("proxy.dll");
-  if (!h) { printf("FATAL: cannot load proxy.dll (%lu)\n", GetLastError()); return 2; }
+  ModHandle h = modLoad(modDefaultName());
+  if (!h) { printf("FATAL: cannot load proxy module\n"); return 2; }
   typedef AEffect* (*MainFn)(audioMasterCallback);
-  MainFn fn = (MainFn)GetProcAddress(h, "VSTPluginMain");
+  MainFn fn = (MainFn)modSym(h, "VSTPluginMain");
   if (!fn) { printf("FATAL: no VSTPluginMain export\n"); return 2; }
   AEffect* fx = fn(masterCb);
   if (!fx) { printf("FATAL: proxy returned null AEffect\n"); return 2; }

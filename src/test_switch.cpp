@@ -2,12 +2,11 @@
 // Pedal down: chord1 ON -> chord1 OFF (queued) -> chord2 ON (same pitches).
 // The engine emits OFF+ON at the same frame for shared pitches. Measure RMS
 // after chord2: silence = bug reproduced.
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #include <cstdio>
 #include <cstring>
 #include <cmath>
 #include "aeffectx.h"
+#include "platform.h"
 
 static const int kBlock = 512;
 static VstTimeInfo g_ti;
@@ -69,10 +68,21 @@ int main() {
   g_ti.timeSigNumerator = 4; g_ti.timeSigDenominator = 4;
   g_ti.flags = kVstTempoValid | kVstPpqPosValid | kVstBarsValid | kVstTransportPlaying;
 
-  HMODULE h = LoadLibraryA("proxy.dll");
+  FILE* ini = fopen("sustainhold.ini", "w");
+  const char* tgt = getenv("SUSTAINHOLD_TARGET");
+  if (!tgt || !*tgt)
+#ifdef _WIN32
+    tgt = "tal_real.dll";
+#else
+    tgt = "tal_real.dylib";
+#endif
+  fprintf(ini, "[sustainhold]\ntarget=%s\n", tgt);
+  fclose(ini);
+
+  ModHandle h = modLoad(modDefaultName());
   if (!h) { printf("FATAL proxy\n"); return 2; }
   typedef AEffect* (*MainFn)(audioMasterCallback);
-  MainFn fn = (MainFn)GetProcAddress(h, "VSTPluginMain");
+  MainFn fn = (MainFn)modSym(h, "VSTPluginMain");
   AEffect* fx = fn ? fn(masterCb) : nullptr;
   if (!fx) { printf("FATAL factory\n"); return 2; }
   fx->dispatcher(fx, effOpen, 0, 0, 0, 0);

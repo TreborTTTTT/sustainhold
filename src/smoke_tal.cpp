@@ -1,12 +1,11 @@
 // smoke_tal.cpp — loads proxy.dll pointed at a COPY of the real TAL-U-No-62
 // and verifies: instantiation, MIDI through the sustain engine, audible
 // audio output, pedal behavior, clean close. No assertions on exact events.
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #include <cstdio>
 #include <cstring>
 #include <cmath>
 #include "aeffectx.h"
+#include "platform.h"
 
 static const int kBlock = 512;
 
@@ -59,13 +58,20 @@ int main() {
                kVstTransportPlaying;
 
   FILE* ini = fopen("sustainhold.ini", "w");
-  fputs("[sustainhold]\ntarget=tal_real.dll\n", ini);
+  const char* tgt = getenv("SUSTAINHOLD_TARGET");
+  if (!tgt || !*tgt)
+#ifdef _WIN32
+    tgt = "tal_real.dll";
+#else
+    tgt = "tal_real.dylib";
+#endif
+  fprintf(ini, "[sustainhold]\ntarget=%s\n", tgt);
   fclose(ini);
 
-  HMODULE h = LoadLibraryA("proxy.dll");
-  if (!h) { printf("FATAL: proxy.dll load failed (%lu)\n", GetLastError()); return 2; }
+  ModHandle h = modLoad(modDefaultName());
+  if (!h) { printf("FATAL: proxy module load failed\n"); return 2; }
   typedef AEffect* (*MainFn)(audioMasterCallback);
-  MainFn fn = (MainFn)GetProcAddress(h, "VSTPluginMain");
+  MainFn fn = (MainFn)modSym(h, "VSTPluginMain");
   AEffect* fx = fn ? fn(masterCb) : nullptr;
   if (!fx) { printf("FATAL: TAL instantiation through proxy failed\n"); return 2; }
 

@@ -2,11 +2,10 @@
 // Logs every effProcessEvents call ("B" marker) and its MIDI events
 // ("EV <deltaFrames> <status-hex> <d1> <d2>") to test_target_events.log
 // in the host's working directory.
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #include <cstdio>
 #include <cstring>
 #include "aeffectx.h"
+#include "platform.h"
 
 static FILE* g_log = nullptr;
 
@@ -54,7 +53,7 @@ static void  VSTCALLBACK tdSetParam(AEffect*, VstInt32, float) {}
 static float VSTCALLBACK tdGetParam(AEffect*, VstInt32) { return 0.f; }
 static void  VSTCALLBACK tdProcessReplace(AEffect*, float**, float**, VstInt32) {}
 
-extern "C" __declspec(dllexport) AEffect* VSTPluginMain(audioMasterCallback hostCb) {
+SH_EXPORT AEffect* VSTPluginMain(audioMasterCallback hostCb) {
   g_log = fopen("test_target_events.log", "w");
   AEffect* e = new AEffect();
   memset(e, 0, sizeof(AEffect));

@@ -1,0 +1,51 @@
+name: build-and-test
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: configure (universal x86_64 + arm64)
+        run: cmake -B build -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+      - name: build
+        run: cmake --build build
+      - name: unit test (host_test, 100 assertions)
+        run: cd build && ./host_test
+      - name: real TAL smoke + chord-switch spectral test
+        run: |
+          curl -fL -A "Mozilla/5.0" -o tal.zip \
+            https://tal-software.com/downloads/plugins/TAL-U-NO-LX-V2-installer_macos.zip
+          unzip -o tal.zip
+          sudo installer -pkg TAL-U-NO-LX-V2-installer.pkg -target /
+          export SUSTAINHOLD_TARGET="/Library/Audio/Plug-Ins/VST/TAL-U-NO-LX-V2.vst/Contents/MacOS/TAL-U-NO-LX-V2"
+          cd build
+          ./smoke_tal
+          ./test_switch
+      - name: package artifact
+        run: |
+          mkdir -p dist
+          cp -R build/TAL-U-NO-LX-V2.vst dist/
+          cp mac/install.command mac/uninstall.command README_MAC.md dist/
+          chmod +x dist/*.command
+          tar czf sustainhold-mac.tar.gz -C dist .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sustainhold-mac
+          path: sustainhold-mac.tar.gz
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: configure
+        run: cmake -B build
+      - name: build
+        run: cmake --build build --config Release
+      - name: unit test (host_test)
+        run: |
+          cd build
+          if (Test-Path Release) { Copy-Item Release/*.dll . -ErrorAction SilentlyContinue }
+          .\host_test.exe

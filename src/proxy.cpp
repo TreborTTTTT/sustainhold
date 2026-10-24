@@ -1,22 +1,29 @@
-// proxy.cpp — VST2 proxy DLL that adds CC64 sustain semantics in front of any
+// proxy.cpp — VST2 proxy that adds CC64 sustain semantics in front of any
 // VST2 x64 instrument. The real plugin is loaded from a path given in
-// sustainhold.ini (next to this DLL); everything else is forwarded untouched.
+// sustainhold.ini (next to this module); everything else is forwarded untouched.
 //
-// Layout at install:
+// Windows layout at install:
 //   C:\Program Files\VSTPlugins\TAL-U-No-62.dll            <- this proxy
 //   C:\Program Files\VSTPlugins\sustainhold.ini           <- config
 //   C:\Program Files\VSTPlugins\TAL-U-No-62-original\
 //        TAL-U-No-62-original.dll                         <- renamed real plugin
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+//
+// macOS layout at install (target = TAL-U-NO-LX-V2, the 64-bit successor):
+//   /Library/Audio/Plug-Ins/VST/TAL-U-NO-LX-V2.vst        <- this proxy bundle
+//        Contents/MacOS/TAL-U-NO-LX-V2
+//        Contents/MacOS/sustainhold.ini
+//   /Library/Application Support/sustainhold/
+//        TAL-U-NO-LX-V2.vst                              <- real plugin, hidden
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <chrono>
 
 #include "aeffectx.h"
 #include "sustain_core.h"
+#include "platform.h"
 
 static const int kMaxEvents = 1024;
 
@@ -28,7 +35,7 @@ struct EvBuf {                       // VstEvents header + contiguous ptr array
 struct ProxyInstance {
   AEffect* self = nullptr;
   AEffect* target = nullptr;
-  HMODULE hMod = nullptr;
+  ModHandle hMod = nullptr;
   audioMasterCallback hostCb = nullptr;
   int targetNumParams = 0;
   int blockFrames = 512;
@@ -41,55 +48,64 @@ static std::vector<ProxyInstance*> g_instances;
 static ProxyInstance* g_building = nullptr;   // instance under construction
 
 // ---------------------------------------------------------------- config ---
-static HMODULE thisModule() {
-  HMODULE mod = nullptr;
-  GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                     GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                     (LPCSTR)&thisModule, &mod);
-  return mod;
-}
+static std::string proxyDir() { return modSelfDir(); }
 
-static std::string proxyDir() {
-  char path[MAX_PATH];
-  GetModuleFileNameA(thisModule(), path, MAX_PATH);
-  std::string s(path);
-  size_t p = s.find_last_of("\\/");
-  return p == std::string::npos ? std::string(".") : s.substr(0, p);
-}
-
-// ini keys (section [sustainhold]): target=<path>, forward_cc64=0|1, cap6=0|1, spacing_ms10=<int>
+// ini keys (section [sustainhold]): target=<path>, forward_cc64=0|1,
+// max_voices=<int>, spacing_ms10=<int>, log=0|1
 static bool readConfig(const std::string& dir, std::string& targetPath, SustainConfig& cfg) {
+#ifdef _WIN32
   targetPath = dir + "\\TAL-U-No-62-original\\TAL-U-No-62-original.dll";
-  char iniPath[MAX_PATH];
-  snprintf(iniPath, MAX_PATH, "%s\\sustainhold.ini", dir.c_str());
-  char val[512];
-  if (GetPrivateProfileStringA("sustainhold", "target", "", val, sizeof(val), iniPath) && val[0]) {
-    std::string t(val);
-    bool abs = (t.size() > 1 && t[1] == ':');
-    targetPath = abs ? t : (dir + "\\" + t);
+  std::string iniPath = dir + "\\sustainhold.ini";
+#else
+  targetPath = "/Library/Application Support/sustainhold/TAL-U-NO-LX-V2.vst/Contents/MacOS/TAL-U-NO-LX-V2";
+  std::string iniPath = dir + "/sustainhold.ini";
+#endif
+  IniVals v;
+  if (readIniPortable(iniPath, v)) {
+    if (v.hasTarget && !v.target.empty()) {
+#ifdef _WIN32
+      bool abs = (v.target.size() > 1 && v.target[1] == ':');
+      targetPath = abs ? v.target : (dir + "\\" + v.target);
+#else
+      bool abs = (!v.target.empty() && v.target[0] == '/');
+      targetPath = abs ? v.target : (dir + "/" + v.target);
+#endif
+    }
+    cfg.forwardCC64 = v.forward_cc64 != 0;
+    cfg.maxVoices   = v.max_voices;
+    if (cfg.maxVoices < 0) cfg.maxVoices = 0;
+    cfg.spacingMs10 = v.spacing_ms10;
+    if (cfg.spacingMs10 < 1) cfg.spacingMs10 = 1;
+    return v.log != 0;
   }
-  cfg.forwardCC64 = GetPrivateProfileIntA("sustainhold", "forward_cc64", 0, iniPath) != 0;
-  cfg.maxVoices   = GetPrivateProfileIntA("sustainhold", "max_voices", 6, iniPath);
-  if (cfg.maxVoices < 0) cfg.maxVoices = 0;
-  cfg.spacingMs10 = GetPrivateProfileIntA("sustainhold", "spacing_ms10", 15, iniPath);
-  if (cfg.spacingMs10 < 1) cfg.spacingMs10 = 1;
-  return GetPrivateProfileIntA("sustainhold", "log", 0, iniPath) != 0;
+  return false;
 }
 
 // -------------------------------------------------------------- event log --
 static FILE* g_log = nullptr;
+static unsigned long long nowMs() {
+  return (unsigned long long)
+    std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 static void logEnable(bool on) {
   if (!on || g_log) return;
-  char base[MAX_PATH] = {0};
-  if (!GetEnvironmentVariableA("LOCALAPPDATA", base, MAX_PATH) || !base[0])
+  char path[600];
+#ifdef _WIN32
+  char base[512] = {0};
+  if (!GetEnvironmentVariableA("LOCALAPPDATA", base, sizeof(base)) || !base[0])
     strcpy(base, ".");
-  char path[MAX_PATH];
-  snprintf(path, MAX_PATH, "%s\\sustainhold_log.txt", base);
+  snprintf(path, sizeof(path), "%s\\sustainhold_log.txt", base);
+#else
+  const char* t = getenv("TMPDIR");
+  if (!t || !*t) t = "/tmp";
+  snprintf(path, sizeof(path), "%s/sustainhold_log.txt", t);
+#endif
   g_log = fopen(path, "w");
 }
 static void logEv(const char* tag, VstEvents* ev) {
   if (!g_log) return;
-  fprintf(g_log, "%s %llu\n", tag, (unsigned long long)GetTickCount64());
+  fprintf(g_log, "%s %llu\n", tag, nowMs());
   if (ev) for (int i = 0; i < ev->numEvents; ++i) {
     VstEvent* e = ev->events[i];
     if (e && e->type == kVstMidiType) {
@@ -238,7 +254,7 @@ static VstIntPtr VSTCALLBACK proxyDispatcher(AEffect* effect, VstInt32 opcode, V
       VstIntPtr r = t->dispatcher(t, effClose, index, value, ptr, opt);
       auto it = std::find(g_instances.begin(), g_instances.end(), inst);
       if (it != g_instances.end()) g_instances.erase(it);
-      if (inst->hMod) FreeLibrary(inst->hMod);
+      modFree(inst->hMod);
       delete inst->self;
       delete inst;
       return r;
@@ -294,19 +310,19 @@ static void VSTCALLBACK proxyProcessDoubleReplace(AEffect* effect, double** inpu
 }
 
 // ------------------------------------------------------------------ main ---
-extern "C" __declspec(dllexport) AEffect* VSTPluginMain(audioMasterCallback hostCb) {
+SH_EXPORT AEffect* VSTPluginMain(audioMasterCallback hostCb) {
   std::string dir = proxyDir();
   std::string targetPath;
   SustainConfig cfg;
   bool wantLog = readConfig(dir, targetPath, cfg);
   logEnable(wantLog);
 
-  HMODULE h = LoadLibraryA(targetPath.c_str());
+  ModHandle h = modLoad(targetPath.c_str());
   if (!h) return nullptr;
   typedef AEffect* (*MainFn)(audioMasterCallback);
-  MainFn fn = (MainFn)GetProcAddress(h, "VSTPluginMain");
-  if (!fn) fn = (MainFn)GetProcAddress(h, "main");
-  if (!fn) { FreeLibrary(h); return nullptr; }
+  MainFn fn = (MainFn)modSym(h, "VSTPluginMain");
+  if (!fn) fn = (MainFn)modSym(h, "main");
+  if (!fn) { modFree(h); return nullptr; }
 
   ProxyInstance* inst = new ProxyInstance();
   inst->hMod = h;
@@ -321,7 +337,7 @@ extern "C" __declspec(dllexport) AEffect* VSTPluginMain(audioMasterCallback host
   g_building = inst;
   AEffect* t = fn(masterProxy);
   g_building = nullptr;
-  if (!t) { FreeLibrary(h); delete inst; return nullptr; }
+  if (!t) { modFree(h); delete inst; return nullptr; }
 
   inst->target = t;
   inst->targetNumParams = t->numParams;
@@ -350,4 +366,10 @@ extern "C" __declspec(dllexport) AEffect* VSTPluginMain(audioMasterCallback host
   return self;
 }
 
-// (no legacy 'main' export: C++ reserves it; Studio One uses VSTPluginMain)
+// macOS VST2 hosts look for the legacy 'main' symbol (Studio One accepts both).
+#ifndef _WIN32
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmain"
+SH_EXPORT AEffect* main(audioMasterCallback hostCb) { return VSTPluginMain(hostCb); }
+#pragma GCC diagnostic pop
+#endif
