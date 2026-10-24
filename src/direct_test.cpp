@@ -97,7 +97,9 @@ int main() {
   }
   fflush(stdout);
 
-  // send one note-on directly (same struct layout the proxy builds)
+  // send one note-on directly (same struct layout the proxy builds).
+  // NB: LX-V2 drops MIDI arriving before the first process() call — warm up.
+  for (int b = 0; b < 4; ++b) { e->processReplacing(e, ins, outs, 512); g_ti.samplePos += 512; }
   {
     static VstMidiEvent m;   // TAL may store the event pointer: keep it alive
     memset(&m, 0, sizeof(m));

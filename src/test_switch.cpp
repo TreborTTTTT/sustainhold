@@ -120,8 +120,18 @@ int main() {
   fx->dispatcher(fx, effMainsChanged, 0, 1, 0, 0);
   fx->dispatcher(fx, effStartProcess, 0, 0, 0, 0);
   armAudible(fx);
-
   float* outs[2] = { out0, out1 };
+  { // warm-up: LX-V2 drops MIDI arriving before the first process() call
+    static float win0[kBlock], win1[kBlock];
+    float* wins[2] = { win0, win1 };
+    for (int i = 0; i < 4; ++i) fx->processReplacing(fx, wins, outs, kBlock);
+    static VstMidiEvent ccw;
+    memset(&ccw, 0, sizeof(ccw));
+    ccw.type = kVstMidiType; ccw.byteSize = (VstInt32)sizeof(VstMidiEvent);
+    ccw.midiData[0] = (char)0xB0; ccw.midiData[1] = 64; ccw.midiData[2] = 0;
+    VstEvents ccEv; ccEv.numEvents = 1; ccEv.reserved = 0; ccEv.events[0] = (VstEvent*)&ccw;
+    fx->dispatcher(fx, effProcessEvents, 0, 0, &ccEv, 0.f);
+  }
   int fr0[1] = {0};
 
   // --- case 1: pedal DOWN, switch chord1(C E G) -> chord2(same C E G) ---

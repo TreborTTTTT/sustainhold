@@ -119,10 +119,23 @@ int main() {
   fx->dispatcher(fx, effMainsChanged, 0, 1, 0, 0);
   fx->dispatcher(fx, effStartProcess, 0, 0, 0, 0);
   armAudible(fx);
-
   float* ins[2]  = { in0, in1 };
   float* outs[2] = { out0, out1 };
   if (fx->numOutputs < 1) { printf("FATAL: no outputs\n"); return 2; }
+  { // warm-up: LX-V2 drops MIDI that arrives before the first process() call.
+    // Render a few silent blocks first, then prime CC64, then proceed.
+    for (int i = 0; i < 4; ++i) fx->processReplacing(fx, ins, outs, kBlock);
+    static VstMidiEvent ccw[2];
+    static VstEvents ccEv;
+    for (int i = 0; i < 2; ++i) {
+      memset(&ccw[i], 0, sizeof(ccw[i]));
+      ccw[i].type = kVstMidiType; ccw[i].byteSize = (VstInt32)sizeof(VstMidiEvent);
+      ccw[i].midiData[0] = (char)0xB0; ccw[i].midiData[1] = 64; ccw[i].midiData[2] = 0;
+    }
+    ccEv.numEvents = 2; ccEv.reserved = 0;
+    ccEv.events[0] = (VstEvent*)&ccw[0]; ccEv.events[1] = (VstEvent*)&ccw[1];
+    fx->dispatcher(fx, effProcessEvents, 0, 0, &ccEv, 0.f);
+  }
 
   // hold a chord with pedal, then release pedal: sound must keep going after
   // note-offs while pedal down, and stop ~release+release-time after pedal up
