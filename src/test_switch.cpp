@@ -7,6 +7,7 @@
 #include <cmath>
 #include "aeffectx.h"
 #include "platform.h"
+#include "arm_audible.h"
 
 static const int kBlock = 512;
 static VstTimeInfo g_ti;
@@ -118,6 +119,7 @@ int main() {
   fx->dispatcher(fx, 84 /*effSetPanLaw*/, 0, 0, 0, 1.0f);
   fx->dispatcher(fx, effMainsChanged, 0, 1, 0, 0);
   fx->dispatcher(fx, effStartProcess, 0, 0, 0, 0);
+  armAudible(fx);
 
   float* outs[2] = { out0, out1 };
   int fr0[1] = {0};
