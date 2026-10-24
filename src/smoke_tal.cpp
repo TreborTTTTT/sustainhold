@@ -111,6 +111,8 @@ int main() {
   static float out0[kBlock], out1[kBlock];
   fx->dispatcher(fx, 42 /*effConnectOutput*/, 0, 0, out0, 0);
   fx->dispatcher(fx, 42 /*effConnectOutput*/, 1, 0, out1, 0);
+  fx->dispatcher(fx, 54 /*effSetBypass*/, 0, 0, 0, 0);
+  fx->dispatcher(fx, 87 /*effSetProcessPrecision*/, 0, 0 /*float32*/, 0, 0);
   fx->dispatcher(fx, effMainsChanged, 0, 1, 0, 0);
   fx->dispatcher(fx, effStartProcess, 0, 0, 0, 0);
 

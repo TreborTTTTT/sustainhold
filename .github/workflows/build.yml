@@ -22,6 +22,10 @@ jobs:
           sudo installer -pkg TAL-U-NO-LX-V2-installer.pkg -target /
           export SUSTAINHOLD_TARGET="/Library/Audio/Plug-Ins/VST/TAL-U-NO-LX-V2.vst/Contents/MacOS/TAL-U-NO-LX-V2"
           cd build
+          clang -dynamiclib -o openlog.dylib ../mac/openlog.c
+          DYLD_INSERT_LIBRARIES=./openlog.dylib ./direct_test > direct.out 2> direct.err || echo "DIRECT SILENT (env issue, not proxy)"
+          grep 'render ok' direct.out || true
+          grep -E ' -> -1' direct.err | grep -viE 'licen|crash|\.plist|\.strings|\.nib|_LSETIME|locale|\.conf|\.dat/' | tail -25 || true
           ./direct_test || echo "DIRECT SILENT (env issue, not proxy)"
           ./smoke_tal
           ./test_switch

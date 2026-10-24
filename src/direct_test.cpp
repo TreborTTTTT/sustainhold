@@ -80,6 +80,8 @@ int main() {
   e->dispatcher(e, effSetBlockSize, 0, 512, 0, 0);
   e->dispatcher(e, 42 /*effConnectOutput*/, 0, 0, out0, 0);
   e->dispatcher(e, 42 /*effConnectOutput*/, 1, 0, out1, 0);
+  e->dispatcher(e, 54 /*effSetBypass*/, 0, 0, 0, 0);
+  e->dispatcher(e, 87 /*effSetProcessPrecision*/, 0, 0 /*float32*/, 0, 0);
   e->dispatcher(e, effMainsChanged, 0, 1, 0, 0);
   e->dispatcher(e, effStartProcess, 0, 0, 0, 0);
   printf("setup ok\n"); fflush(stdout);
