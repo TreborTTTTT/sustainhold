@@ -5,4 +5,4 @@ build/
 *.bak
 install_log.txt
 update_log.txt
-sdk/
+
